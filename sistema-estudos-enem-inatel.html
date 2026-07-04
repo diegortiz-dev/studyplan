@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Painel de Missão — ENEM / INATEL 2027</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root{
+  --bg: #0a0f1a;
+  --panel: #111a2b;
+  --panel-2: #0e1522;
+  --line: #223151;
+  --text: #e7ecf7;
+  --muted: #8b96b3;
+  --cyan: #4cd7e0;
+  --amber: #f2a93b;
+  --green: #52d68a;
+  --red: #ef6a6a;
+  --mono: 'JetBrains Mono', monospace;
+  --disp: 'Space Grotesk', sans-serif;
+  --body: 'Inter', sans-serif;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family: var(--body);
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 42px 42px;
+  background-attachment: fixed;
+  background-position: -1px -1px;
+  min-height:100vh;
+}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 18px 60px;}
+
+/* HEADER / MISSION COUNTDOWN */
+.mission{
+  background:linear-gradient(180deg, var(--panel), var(--panel-2));
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:20px 22px;
+  margin-bottom:18px;
+  position:relative;
+  overflow:hidden;
+}
+.mission::before{
+  content:"";position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg, var(--cyan), var(--amber), var(--green));
+}
+.mission-top{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+.mission-title{font-family:var(--disp);font-weight:700;font-size:1.3rem;letter-spacing:.3px;}
+.mission-sub{font-family:var(--mono);font-size:.72rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;}
+.countdowns{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;}
+.cd{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;}
+.cd-label{font-family:var(--mono);font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:6px;}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block;background:var(--cyan);}
+.cd-num{font-family:var(--mono);font-size:2rem;font-weight:700;line-height:1.15;margin-top:2px;}
+.cd-num small{font-size:.9rem;color:var(--muted);font-weight:400;}
+.cd-date{font-size:.72rem;color:var(--muted);margin-top:2px;}
+
+/* NAV */
+.nav{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;}
+.nav button{
+  font-family:var(--mono); font-size:.78rem; letter-spacing:.5px;
+  background:var(--panel); color:var(--muted); border:1px solid var(--line);
+  padding:9px 14px;border-radius:7px;cursor:pointer;transition:.15s;
+}
+.nav button:hover{color:var(--text);border-color:#3a4d78;}
+.nav button.active{background:var(--cyan);color:#06232a;border-color:var(--cyan);font-weight:700;}
+
+.panel{
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:20px;margin-bottom:16px;
+}
+.panel h2{font-family:var(--disp);font-size:1.05rem;margin:0 0 4px;}
+.panel .hint{color:var(--muted);font-size:.82rem;margin:0 0 16px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media (max-width:720px){.grid2{grid-template-columns:1fr;} .countdowns{grid-template-columns:repeat(2,1fr);}}
+
+/* progress bars */
+.barrow{display:grid;grid-template-columns:120px 1fr 60px;align-items:center;gap:10px;margin-bottom:10px;font-size:.85rem;}
+.barrow .lbl{color:var(--text);}
+.bar-track{height:9px;background:var(--panel-2);border:1px solid var(--line);border-radius:5px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--cyan),var(--green));}
+.barrow .val{font-family:var(--mono);color:var(--muted);text-align:right;font-size:.78rem;}
+
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:6px;}
+.stat{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;}
+.stat .n{font-family:var(--mono);font-size:1.5rem;font-weight:700;color:var(--cyan);}
+.stat .l{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+
+/* forms */
+label{font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px;}
+input, select{
+  background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+  border-radius:6px;padding:8px 10px;font-family:var(--body);font-size:.85rem;width:100%;
+}
+input[type=range]{padding:0;}
+.formrow{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:14px;}
+.formrow > div{flex:1;min-width:120px;}
+button.action{
+  background:var(--cyan);color:#06232a;border:none;border-radius:6px;
+  padding:9px 16px;font-weight:700;font-size:.82rem;cursor:pointer;font-family:var(--body);
+}
+button.action.secondary{background:transparent;color:var(--cyan);border:1px solid var(--cyan);}
+button.action.danger{background:transparent;color:var(--red);border:1px solid var(--red);}
+button.action:hover{opacity:.88;}
+
+/* weight sliders */
+.weightrow{display:grid;grid-template-columns:110px 1fr 46px;align-items:center;gap:10px;margin-bottom:10px;}
+.weightrow .name{font-size:.85rem;}
+.weightrow .pct{font-family:var(--mono);text-align:right;color:var(--amber);font-size:.85rem;}
+.weightsum{font-family:var(--mono);font-size:.8rem;color:var(--muted);margin-top:4px;}
+.weightsum.ok{color:var(--green);}
+.weightsum.bad{color:var(--red);}
+
+/* schedule table */
+table{width:100%;border-collapse:collapse;font-size:.82rem;}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;}
+th{background:var(--panel-2);color:var(--muted);font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;}
+.tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:.72rem;margin:2px 3px 2px 0;font-family:var(--mono);}
+
+/* topics */
+.subject-block{margin-bottom:10px;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+.subject-head{
+  display:flex;justify-content:space-between;align-items:center;padding:12px 14px;
+  background:var(--panel-2);cursor:pointer;
+}
+.subject-head .name{font-family:var(--disp);font-weight:600;font-size:.95rem;}
+.subject-head .pct{font-family:var(--mono);color:var(--cyan);font-size:.82rem;}
+.topic-list{padding:6px 14px 12px;display:none;}
+.subject-block.open .topic-list{display:block;}
+.topic-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--panel-2);font-size:.85rem;}
+.topic-row:last-child{border-bottom:none;}
+.status-btn{
+  font-family:var(--mono);font-size:.68rem;padding:4px 9px;border-radius:12px;border:1px solid var(--line);
+  cursor:pointer;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;
+}
+.status-novo{color:var(--muted);}
+.status-estudando{color:var(--amber);border-color:var(--amber);}
+.status-revisar{color:#c58bf0;border-color:#c58bf0;}
+.status-dominado{color:var(--green);border-color:var(--green);}
+
+.review-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--panel-2);border:1px solid var(--line);border-radius:7px;margin-bottom:8px;font-size:.85rem;}
+.review-item .meta{color:var(--muted);font-size:.72rem;}
+.overdue{color:var(--red);}
+
+.empty{color:var(--muted);font-size:.85rem;padding:16px;text-align:center;border:1px dashed var(--line);border-radius:8px;}
+
+.simrow{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--panel-2);font-size:.85rem;}
+.simrow .sc{font-family:var(--mono);font-weight:700;color:var(--cyan);}
+
+footer{color:var(--muted);font-size:.72rem;text-align:center;margin-top:24px;}
+.loading{color:var(--muted);font-size:.85rem;padding:20px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mission">
+    <div class="mission-top">
+      <div>
+        <div class="mission-title">🚀 Painel de Missão — Rumo ao Inatel 2027.1</div>
+        <div class="mission-sub">Engenharia de Software · foco em exatas</div>
+      </div>
+      <div class="mission-sub" id="today-label"></div>
+    </div>
+    <div class="countdowns" id="countdowns"></div>
+  </div>
+
+  <div class="nav" id="nav">
+    <button data-tab="painel" class="active">Painel</button>
+    <button data-tab="cronograma">Cronograma</button>
+    <button data-tab="trilha">Trilha de conteúdo</button>
+    <button data-tab="revisao">Revisão espaçada</button>
+    <button data-tab="simulados">Simulados</button>
+    <button data-tab="ajustes">Ajustes</button>
+  </div>
+
+  <div id="app"><div class="loading">Carregando seu painel…</div></div>
+
+  <footer>Dados salvos automaticamente no seu navegador (armazenamento pessoal deste artifact).</footer>
+</div>
+
+<script>
+/* ================= DATA MODEL ================= */
+const ENEM_D1 = "2026-11-08";
+const ENEM_D2 = "2026-11-15";
+const INATEL_EST = "2026-11-29"; // estimativa com base em editais anteriores (prova costuma ocorrer no último fim de semana de novembro)
+
+const SUBJECT_META = {
+  matematica: {name:"Matemática", color:"#4cd7e0"},
+  fisica: {name:"Física", color:"#f2a93b"},
+  quimica: {name:"Química", color:"#c58bf0"},
+  redacao: {name:"Redação", color:"#52d68a"},
+  portugues: {name:"Português / Literatura", color:"#7aa2f7"},
+  ingles: {name:"Inglês", color:"#ef9a9a"},
+  humanas: {name:"Humanas (Enem)", color:"#8b96b3"},
+};
+
+const TOPICS = {
+  matematica: [
+    ["m01","Conjuntos e conjuntos numéricos"],
+    ["m02","Razão, proporção e porcentagem"],
+    ["m03","Funções afim e quadrática"],
+    ["m04","Função exponencial e logarítmica"],
+    ["m05","Progressões (PA e PG)"],
+    ["m06","Trigonometria no triângulo retângulo"],
+    ["m07","Trigonometria — ciclo e funções trig."],
+    ["m08","Matrizes e determinantes"],
+    ["m09","Sistemas lineares"],
+    ["m10","Geometria plana — áreas e semelhança"],
+    ["m11","Geometria espacial"],
+    ["m12","Geometria analítica"],
+    ["m13","Análise combinatória"],
+    ["m14","Probabilidade"],
+    ["m15","Estatística"],
+    ["m16","Números complexos"],
+    ["m17","Polinômios e equações algébricas"],
+  ],
+  fisica: [
+    ["f01","Cinemática escalar e vetorial"],
+    ["f02","Dinâmica — Leis de Newton"],
+    ["f03","Trabalho, energia e potência"],
+    ["f04","Impulso e quantidade de movimento"],
+    ["f05","Estática e Hidrostática"],
+    ["f06","Gravitação"],
+    ["f07","Termometria e dilatação"],
+    ["f08","Calorimetria e mudanças de estado"],
+    ["f09","Termodinâmica"],
+    ["f10","Óptica geométrica"],
+    ["f11","Ondulatória"],
+    ["f12","Eletrostática"],
+    ["f13","Eletrodinâmica — circuitos"],
+    ["f14","Eletromagnetismo"],
+    ["f15","Física moderna (introdução)"],
+  ],
+  quimica: [
+    ["q01","Modelos atômicos e tabela periódica"],
+    ["q02","Ligações químicas"],
+    ["q03","Funções inorgânicas"],
+    ["q04","Estequiometria"],
+    ["q05","Soluções"],
+    ["q06","Termoquímica"],
+    ["q07","Cinética química"],
+    ["q08","Equilíbrio químico"],
+    ["q09","Eletroquímica"],
+    ["q10","Química orgânica — funções e nomenclatura"],
+    ["q11","Isomeria e reações orgânicas"],
+  ],
+  redacao: [
+    ["r01","Estrutura dissertativo-argumentativa"],
+    ["r02","Repertório sociocultural"],
+    ["r03","Coesão e coerência"],
+    ["r04","Proposta de intervenção (Enem)"],
+    ["r05","Prática cronometrada + autocorreção"],
+  ],
+  portugues: [
+    ["p01","Interpretação de texto"],
+    ["p02","Gramática essencial (crase, concordância, regência)"],
+    ["p03","Literatura — escolas literárias"],
+    ["p04","Figuras de linguagem e variação linguística"],
+  ],
+  ingles: [
+    ["i01","Leitura e interpretação em inglês"],
+    ["i02","Vocabulário e falsos cognatos"],
+    ["i03","Estrutura gramatical básica"],
+  ],
+  humanas: [
+    ["h01","História do Brasil"],
+    ["h02","Geografia — meio ambiente e geopolítica"],
+    ["h03","Filosofia e Sociologia"],
+    ["h04","Atualidades"],
+  ],
+};
+
+const DEFAULT_STATE = {
+  weights: {matematica:28, fisica:24, quimica:12, redacao:16, portugues:10, ingles:5, humanas:5},
+  days: ["seg","ter","qua","qui","sex","sab"],
+  hoursPerDay: 4,
+  statusMap: {},       // topicId -> 'novo'|'estudando'|'revisar'|'dominado'
+  sessions: [],         // {date, subject, minutes}
+  reviews: [],          // {id, topicId, topicName, subject, stage, dueDate}
+  simulados: [],        // {id, date, tipo, area, nota}
+  startDate: null,
+};
+
+const DAY_LABELS = {seg:"Segunda",ter:"Terça",qua:"Quarta",qui:"Quinta",sex:"Sexta",sab:"Sábado",dom:"Domingo"};
+const REVIEW_OFFSETS = [1,3,7,16,35];
+
+let STATE = null;
+
+/* ================= STORAGE ================= */
+async function loadState(){
+  try{
+    const res = await window.storage.get('app-state', false);
+    if(res && res.value){
+      const parsed = JSON.parse(res.value);
+      return Object.assign({}, DEFAULT_STATE, parsed);
+    }
+  }catch(e){ /* key doesn't exist yet */ }
+  const fresh = JSON.parse(JSON.stringify(DEFAULT_STATE));
+  fresh.startDate = todayStr();
+  return fresh;
+}
+async function saveState(){
+  try{
+    await window.storage.set('app-state', JSON.stringify(STATE), false);
+  }catch(e){ console.error('Falha ao salvar', e); }
+}
+
+/* ================= HELPERS ================= */
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function daysBetween(a,b){ return Math.round((new Date(b) - new Date(a)) / 86400000); }
+function fmtDate(d){
+  const dt = new Date(d+"T12:00:00");
+  return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
+}
+function weekBounds(dateStr){
+  const d = new Date(dateStr+"T12:00:00");
+  const dow = (d.getDay()+6)%7; // monday=0
+  const monday = new Date(d); monday.setDate(d.getDate()-dow);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
+  return [monday.toISOString().slice(0,10), sunday.toISOString().slice(0,10)];
+}
+function allTopics(){
+  const out = [];
+  for(const subj in TOPICS){ TOPICS[subj].forEach(([id,name])=>out.push({id,name,subj})); }
+  return out;
+}
+function subjectProgress(subj){
+  const topics = TOPICS[subj];
+  const done = topics.filter(([id])=>STATE.statusMap[id]==='dominado').length;
+  return Math.round((done/topics.length)*100);
+}
+function uid(){ return Math.random().toString(36).slice(2,9); }
+
+/* ================= RENDER: COUNTDOWNS ================= */
+function renderCountdowns(){
+  const el = document.getElementById('countdowns');
+  const today = todayStr();
+  document.getElementById('today-label').textContent = new Date().toLocaleDateString('pt-BR',{weekday:'long', day:'2-digit', month:'long', year:'numeric'});
+  const items = [
+    {label:"Enem · 1º dia", date:ENEM_D1, note:"Linguagens · Humanas · Redação"},
+    {label:"Enem · 2º dia", date:ENEM_D2, note:"Natureza · Matemática"},
+    {label:"Inatel (estimado)", date:INATEL_EST, note:"Edital 2027/1 sai em geral em agosto — confirme depois"},
+  ];
+  el.innerHTML = items.map(it=>{
+    const d = daysBetween(today, it.date);
+    return `<div class="cd">
+      <div class="cd-label"><span class="dot"></span>${it.label}</div>
+      <div class="cd-num">${d>=0?d:0}<small> dias</small></div>
+      <div class="cd-date">${fmtDate(it.date)} · ${it.note}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ================= TABS ================= */
+const TABS = {};
+function renderApp(tab){
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  document.getElementById('app').innerHTML = TABS[tab]();
+  attachHandlers(tab);
+}
+
+/* ---------- PAINEL ---------- */
+TABS.painel = function(){
+  const [wkStart, wkEnd] = weekBounds(todayStr());
+  const weekSessions = STATE.sessions.filter(s=>s.date>=wkStart && s.date<=wkEnd);
+  const totalWeekMin = weekSessions.reduce((a,s)=>a+s.minutes,0);
+  const targetWeekMin = STATE.hoursPerDay*60*STATE.days.length;
+
+  const bySubjWeek = {};
+  Object.keys(SUBJECT_META).forEach(s=>bySubjWeek[s]=0);
+  weekSessions.forEach(s=>bySubjWeek[s.subject]=(bySubjWeek[s.subject]||0)+s.minutes);
+
+  const totalAll = STATE.sessions.reduce((a,s)=>a+s.minutes,0);
+
+  // streak
+  const daysWithSessions = new Set(STATE.sessions.map(s=>s.date));
+  let streak = 0;
+  let cursor = new Date(todayStr()+"T12:00:00");
+  while(daysWithSessions.has(cursor.toISOString().slice(0,10))){
+    streak++; cursor.setDate(cursor.getDate()-1);
+  }
+
+  const reviewsToday = STATE.reviews.filter(r=>r.dueDate<=todayStr()).length;
+
+  const barsHtml = Object.keys(SUBJECT_META).map(s=>{
+    const target = Math.round(targetWeekMin*(STATE.weights[s]/100));
+    const done = bySubjWeek[s]||0;
+    const pct = target>0 ? Math.min(100, Math.round((done/target)*100)) : 0;
+    return `<div class="barrow">
+      <div class="lbl">${SUBJECT_META[s].name}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${SUBJECT_META[s].color}"></div></div>
+      <div class="val">${Math.round(done/60*10)/10}h/${Math.round(target/60*10)/10}h</div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="panel">
+    <h2>Progresso da semana</h2>
+    <p class="hint">${fmtDate(wkStart)} – ${fmtDate(wkEnd)} · meta semanal: ${Math.round(targetWeekMin/60)}h</p>
+    <div class="stat-row">
+      <div class="stat"><div class="n">${Math.round(totalWeekMin/60*10)/10}h</div><div class="l">estudadas essa semana</div></div>
+      <div class="stat"><div class="n">${Math.round(totalAll/60*10)/10}h</div><div class="l">total acumulado</div></div>
+      <div class="stat"><div class="n">${streak}</div><div class="l">dias seguidos estudando</div></div>
+      <div class="stat"><div class="n" style="${reviewsToday>0?'color:var(--amber)':''}">${reviewsToday}</div><div class="l">revisões pendentes hoje</div></div>
+    </div>
+    ${barsHtml}
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>Trilha de conteúdo</h2>
+      <p class="hint">% de tópicos dominados por matéria</p>
+      ${Object.keys(SUBJECT_META).map(s=>{
+        const pct = subjectProgress(s);
+        return `<div class="barrow"><div class="lbl">${SUBJECT_META[s].name}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${SUBJECT_META[s].color}"></div></div>
+          <div class="val">${pct}%</div></div>`;
+      }).join('')}
+    </div>
+    <div class="panel">
+      <h2>Registrar sessão de hoje</h2>
+      <p class="hint">Log rápido — o que você estudou agora?</p>
+      <form id="quick-session">
+        <div class="formrow">
+          <div><label>Matéria</label>
+            <select name="subject">${Object.keys(SUBJECT_META).map(s=>`<option value="${s}">${SUBJECT_META[s].name}</option>`).join('')}</select>
+          </div>
+          <div><label>Minutos</label><input type="number" name="minutes" min="5" step="5" value="60" required></div>
+        </div>
+        <button class="action" type="submit">Registrar</button>
+      </form>
+    </div>
+  </div>
+  `;
+};
+
+/* ---------- CRONOGRAMA ---------- */
+function computeSchedule(){
+  const subjects = Object.keys(SUBJECT_META);
+  const totalWeekHours = STATE.hoursPerDay * STATE.days.length;
+  let remaining = {};
+  subjects.forEach(s=>remaining[s] = totalWeekHours*(STATE.weights[s]/100));
+  const schedule = {};
+  STATE.days.forEach(day=>{
+    schedule[day] = [];
+    let dayLeft = STATE.hoursPerDay;
+    let guard = 0;
+    while(dayLeft > 0.16 && guard < 30){
+      guard++;
+      const ordered = subjects.filter(s=>remaining[s]>0.16).sort((a,b)=>remaining[b]-remaining[a]);
+      if(ordered.length===0) break;
+      const s = ordered[0];
+      const block = Math.min(1.5, remaining[s], dayLeft);
+      schedule[day].push({subject:s, hours:Math.round(block*4)/4});
+      remaining[s] -= block;
+      dayLeft -= block;
+    }
+  });
+  return schedule;
+}
+
+TABS.cronograma = function(){
+  const schedule = computeSchedule();
+  const weightRows = Object.keys(SUBJECT_META).map(s=>`
+    <div class="weightrow">
+      <div class="name">${SUBJECT_META[s].name}</div>
+      <input type="range" min="0" max="60" value="${STATE.weights[s]}" data-weight="${s}">
+      <div class="pct" id="pct-${s}">${STATE.weights[s]}%</div>
+    </div>`).join('');
+  const sum = Object.values(STATE.weights).reduce((a,b)=>a+b,0);
+
+  const dayChecks = Object.keys(DAY_LABELS).filter(d=>d!=='dom' || true).map(d=>{
+    const checked = STATE.days.includes(d) ? 'checked' : '';
+    return `<label style="display:inline-flex;align-items:center;gap:6px;margin-right:14px;font-size:.82rem;color:var(--text);">
+      <input type="checkbox" style="width:auto;" data-day="${d}" ${checked}> ${DAY_LABELS[d]}
+    </label>`;
+  }).join('');
+
+  const tableRows = STATE.days.map(day=>{
+    const blocks = schedule[day] || [];
+    const total = blocks.reduce((a,b)=>a+b.hours,0);
+    const tags = blocks.map(b=>`<span class="tag" style="background:${SUBJECT_META[b.subject].color}22;color:${SUBJECT_META[b.subject].color};border:1px solid ${SUBJECT_META[b.subject].color}55;">${SUBJECT_META[b.subject].name} · ${b.hours}h</span>`).join('');
+    return `<tr><td><b>${DAY_LABELS[day]}</b></td><td>${tags||'—'}</td><td>${total}h</td></tr>`;
+  }).join('');
+
+  return `
+  <div class="panel">
+    <h2>Peso de cada matéria</h2>
+    <p class="hint">Ajuste conforme sua prioridade real. O total não precisa fechar 100% — o sistema normaliza automaticamente ao gerar o cronograma.</p>
+    ${weightRows}
+    <div class="weightsum ${sum===100?'ok':'bad'}" id="weight-sum">Soma atual: ${sum}% ${sum===100?'✓':'(será normalizado)'}</div>
+  </div>
+
+  <div class="panel">
+    <h2>Disponibilidade</h2>
+    <div class="formrow">
+      <div><label>Horas de estudo por dia</label><input type="number" id="hours-per-day" min="1" max="14" step="0.5" value="${STATE.hoursPerDay}"></div>
+    </div>
+    <label>Dias da semana em que você estuda</label>
+    <div style="margin-top:6px;">${dayChecks}</div>
+    <div style="margin-top:14px;"><button class="action" id="save-availability">Atualizar cronograma</button></div>
+  </div>
+
+  <div class="panel">
+    <h2>Cronograma sugerido</h2>
+    <p class="hint">Gerado a partir dos pesos e da sua disponibilidade — total de ${STATE.hoursPerDay*STATE.days.length}h/semana. Isso é ponto de partida: ajuste os pesos até o cronograma bater com sua rotina real.</p>
+    <table><thead><tr><th>Dia</th><th>Blocos de estudo</th><th>Total</th></tr></thead><tbody>${tableRows}</tbody></table>
+  </div>
+  `;
+};
+
+/* ---------- TRILHA ---------- */
+TABS.trilha = function(){
+  const statusCycle = ['novo','estudando','revisar','dominado'];
+  const statusLabel = {novo:'Não iniciado', estudando:'Estudando', revisar:'Revisar', dominado:'Dominado'};
+
+  const blocks = Object.keys(SUBJECT_META).map(subj=>{
+    const pct = subjectProgress(subj);
+    const rows = TOPICS[subj].map(([id,name])=>{
+      const status = STATE.statusMap[id] || 'novo';
+      return `<div class="topic-row">
+        <div>${name}</div>
+        <button class="status-btn status-${status}" data-topic="${id}" data-subject="${subj}" data-topicname="${name.replace(/"/g,'&quot;')}">${statusLabel[status]}</button>
+      </div>`;
+    }).join('');
+    return `<div class="subject-block" data-block="${subj}">
+      <div class="subject-head" data-toggle="${subj}">
+        <span class="name">${SUBJECT_META[subj].name}</span>
+        <span class="pct">${pct}% dominado</span>
+      </div>
+      <div class="topic-list">${rows}</div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="panel">
+    <h2>Trilha de conteúdo</h2>
+    <p class="hint">Clique numa matéria pra abrir os tópicos. Clique no status pra avançar: Não iniciado → Estudando → Revisar → Dominado. Ao marcar "Dominado", o tópico entra automaticamente na fila de revisão espaçada (1, 3, 7, 16 e 35 dias depois).</p>
+    ${blocks}
+  </div>
+  `;
+};
+
+/* ---------- REVISÃO ---------- */
+TABS.revisao = function(){
+  const today = todayStr();
+  const due = STATE.reviews.filter(r=>r.dueDate<=today).sort((a,b)=>a.dueDate<b.dueDate?-1:1);
+  const upcoming = STATE.reviews.filter(r=>r.dueDate>today).sort((a,b)=>a.dueDate<b.dueDate?-1:1).slice(0,10);
+
+  const dueHtml = due.length ? due.map(r=>`
+    <div class="review-item">
+      <div>
+        <div>${r.topicName}</div>
+        <div class="meta">${SUBJECT_META[r.subject].name} · etapa ${r.stage+1}/${REVIEW_OFFSETS.length} · <span class="overdue">venceu ${fmtDate(r.dueDate)}</span></div>
+      </div>
+      <button class="action" data-done="${r.id}">Revisado ✓</button>
+    </div>`).join('') : `<div class="empty">Nenhuma revisão pendente hoje. 🎉</div>`;
+
+  const upcomingHtml = upcoming.length ? upcoming.map(r=>`
+    <div class="review-item">
+      <div><div>${r.topicName}</div><div class="meta">${SUBJECT_META[r.subject].name} · etapa ${r.stage+1}/${REVIEW_OFFSETS.length}</div></div>
+      <div class="meta">${fmtDate(r.dueDate)}</div>
+    </div>`).join('') : `<div class="empty">Nada agendado ainda — domine tópicos na Trilha pra alimentar a fila.</div>`;
+
+  return `
+  <div class="panel">
+    <h2>Revisões de hoje</h2>
+    <p class="hint">Sistema de repetição espaçada (1 → 3 → 7 → 16 → 35 dias). É isso que evita esquecer o que você já estudou.</p>
+    ${dueHtml}
+  </div>
+  <div class="panel">
+    <h2>Próximas revisões</h2>
+    ${upcomingHtml}
+  </div>
+  `;
+};
+
+/* ---------- SIMULADOS ---------- */
+TABS.simulados = function(){
+  const rows = [...STATE.simulados].sort((a,b)=>a.date<b.date?1:-1);
+  const rowsHtml = rows.length ? rows.map(s=>`
+    <div class="simrow">
+      <div>${fmtDate(s.date)} · <b>${s.tipo}</b> · ${s.area}</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="sc">${s.nota}</span>
+        <button class="action danger" style="padding:4px 8px;font-size:.7rem;" data-delsim="${s.id}">excluir</button>
+      </div>
+    </div>`).join('') : `<div class="empty">Nenhum simulado registrado ainda.</div>`;
+
+  return `
+  <div class="panel">
+    <h2>Registrar simulado</h2>
+    <form id="sim-form">
+      <div class="formrow">
+        <div><label>Data</label><input type="date" name="date" value="${todayStr()}" required></div>
+        <div><label>Tipo</label><select name="tipo"><option>Enem</option><option>Inatel</option><option>Simulado geral</option></select></div>
+        <div><label>Área</label>
+          <select name="area">
+            <option>Matemática</option><option>Física</option><option>Química</option>
+            <option>Linguagens</option><option>Humanas</option><option>Redação</option><option>Geral</option>
+          </select>
+        </div>
+        <div><label>Nota</label><input type="number" name="nota" step="0.1" required></div>
+      </div>
+      <button class="action" type="submit">Salvar</button>
+    </form>
+  </div>
+  <div class="panel">
+    <h2>Histórico</h2>
+    ${rowsHtml}
+  </div>
+  `;
+};
+
+/* ---------- AJUSTES ---------- */
+TABS.ajustes = function(){
+  return `
+  <div class="panel">
+    <h2>Sobre as datas</h2>
+    <p class="hint" style="font-size:.85rem;line-height:1.6;">
+      Enem 2026: provas em 08/11 (Linguagens, Humanas e Redação) e 15/11 (Natureza e Matemática) — datas oficiais do edital do Inep.<br>
+      Inatel: a data exata do vestibular de ingresso 2027/1 ainda não foi publicada (o edital costuma sair em agosto). A estimativa aqui é baseada no padrão de edições anteriores (prova no fim de novembro, com edição extra em janeiro). Atualize assim que o edital 2027/1 for divulgado em inatel.br/vestibular.<br>
+      Lembrete: o Inatel também aceita a nota do Enem como forma de ingresso — ou seja, estudar bem pro Enem também te ajuda a entrar por essa via, sem precisar fazer a prova presencial.
+    </p>
+  </div>
+  <div class="panel">
+    <h2>Dados</h2>
+    <p class="hint">Tudo fica salvo automaticamente no seu navegador. Se quiser recomeçar do zero:</p>
+    <button class="action danger" id="reset-data">Apagar todos os dados e recomeçar</button>
+  </div>
+  `;
+};
+
+/* ================= EVENT HANDLERS ================= */
+function attachHandlers(tab){
+  if(tab==='painel'){
+    const form = document.getElementById('quick-session');
+    form.addEventListener('submit', async e=>{
+      e.preventDefault();
+      const fd = new FormData(form);
+      STATE.sessions.push({date:todayStr(), subject:fd.get('subject'), minutes:parseInt(fd.get('minutes'))});
+      await saveState();
+      renderApp('painel');
+    });
+  }
+
+  if(tab==='cronograma'){
+    document.querySelectorAll('input[type=range][data-weight]').forEach(inp=>{
+      inp.addEventListener('input', ()=>{
+        const s = inp.dataset.weight;
+        STATE.weights[s] = parseInt(inp.value);
+        document.getElementById('pct-'+s).textContent = inp.value+'%';
+        const sum = Object.values(STATE.weights).reduce((a,b)=>a+b,0);
+        const sumEl = document.getElementById('weight-sum');
+        sumEl.textContent = `Soma atual: ${sum}% ${sum===100?'✓':'(será normalizado)'}`;
+        sumEl.className = 'weightsum '+(sum===100?'ok':'bad');
+      });
+      inp.addEventListener('change', async ()=>{ await saveState(); renderApp('cronograma'); });
+    });
+    document.getElementById('save-availability').addEventListener('click', async ()=>{
+      const hrs = parseFloat(document.getElementById('hours-per-day').value)||4;
+      const days = [...document.querySelectorAll('input[data-day]:checked')].map(c=>c.dataset.day);
+      STATE.hoursPerDay = hrs;
+      STATE.days = days.length ? days : STATE.days;
+      await saveState();
+      renderApp('cronograma');
+    });
+  }
+
+  if(tab==='trilha'){
+    document.querySelectorAll('[data-toggle]').forEach(head=>{
+      head.addEventListener('click', ()=>{
+        head.parentElement.classList.toggle('open');
+      });
+    });
+    document.querySelectorAll('.status-btn').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        const id = btn.dataset.topic;
+        const subj = btn.dataset.subject;
+        const name = btn.dataset.topicname;
+        const cycle = ['novo','estudando','revisar','dominado'];
+        const current = STATE.statusMap[id] || 'novo';
+        const next = cycle[(cycle.indexOf(current)+1) % cycle.length];
+        STATE.statusMap[id] = next;
+        if(next==='dominado' && !STATE.reviews.some(r=>r.topicId===id && r.stage < REVIEW_OFFSETS.length)){
+          const due = new Date(); due.setDate(due.getDate()+REVIEW_OFFSETS[0]);
+          STATE.reviews.push({id:uid(), topicId:id, topicName:name, subject:subj, stage:0, dueDate:due.toISOString().slice(0,10)});
+        }
+        await saveState();
+        renderApp('trilha');
+      });
+    });
+  }
+
+  if(tab==='revisao'){
+    document.querySelectorAll('[data-done]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const id = btn.dataset.done;
+        const rev = STATE.reviews.find(r=>r.id===id);
+        if(rev){
+          rev.stage += 1;
+          if(rev.stage < REVIEW_OFFSETS.length){
+            const due = new Date(); due.setDate(due.getDate()+REVIEW_OFFSETS[rev.stage]);
+            rev.dueDate = due.toISOString().slice(0,10);
+          } else {
+            STATE.reviews = STATE.reviews.filter(r=>r.id!==id);
+          }
+        }
+        await saveState();
+        renderApp('revisao');
+      });
+    });
+  }
+
+  if(tab==='simulados'){
+    const form = document.getElementById('sim-form');
+    form.addEventListener('submit', async e=>{
+      e.preventDefault();
+      const fd = new FormData(form);
+      STATE.simulados.push({id:uid(), date:fd.get('date'), tipo:fd.get('tipo'), area:fd.get('area'), nota:parseFloat(fd.get('nota'))});
+      await saveState();
+      renderApp('simulados');
+    });
+    document.querySelectorAll('[data-delsim]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        STATE.simulados = STATE.simulados.filter(s=>s.id!==btn.dataset.delsim);
+        await saveState();
+        renderApp('simulados');
+      });
+    });
+  }
+
+  if(tab==='ajustes'){
+    document.getElementById('reset-data').addEventListener('click', async ()=>{
+      if(confirm('Isso vai apagar todo o seu progresso salvo. Tem certeza?')){
+        STATE = JSON.parse(JSON.stringify(DEFAULT_STATE));
+        STATE.startDate = todayStr();
+        await saveState();
+        renderApp('painel');
+      }
+    });
+  }
+}
+
+/* ================= NAV ================= */
+document.getElementById('nav').addEventListener('click', e=>{
+  if(e.target.tagName==='BUTTON'){ renderApp(e.target.dataset.tab); }
+});
+
+/* ================= INIT ================= */
+(async function init(){
+  STATE = await loadState();
+  renderCountdowns();
+  renderApp('painel');
+})();
+</script>
+</body>
+</html>

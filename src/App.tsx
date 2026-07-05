@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   SUBJECT_META,
   SUBJECT_ORDER,
@@ -22,14 +22,39 @@ import {
   subjectReviewProgress,
 } from "./study";
 import { usePersistentState } from "./storage";
-import type { SimuladoEntry, StudyState, SubjectId, WeekDay } from "./types";
+import type { ReviewEntry, SimuladoEntry, StudyState, SubjectId, WeekDay } from "./types";
 
 const APP_STORAGE_KEY = "studyplan-state-v1";
-const TAB_KEYS = ["painel", "cronograma", "trilha", "revisao", "simulados", "ajustes"] as const;
-type TabKey = (typeof TAB_KEYS)[number];
+const TAB_ITEMS = [
+  { key: "hoje", label: "Hoje" },
+  { key: "cronograma", label: "Cronograma" },
+  { key: "trilha", label: "Trilha" },
+  { key: "revisao", label: "Revisao" },
+  { key: "simulados", label: "Simulados" },
+  { key: "ajustes", label: "Ajustes" },
+] as const;
+type TabKey = (typeof TAB_ITEMS)[number]["key"];
+
+type TimerPhase = "focus" | "break";
+
+interface TimerState {
+  subject: SubjectId;
+  phase: TimerPhase;
+  focusMinutes: number;
+  breakMinutes: number;
+  remainingSeconds: number;
+  running: boolean;
+  completedCycles: number;
+}
+
+const WEEKDAY_SEQUENCE: WeekDay[] = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
 
 function clampWeight(value: number) {
   return Math.max(0, Math.min(60, value));
+}
+
+function clampMinutes(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function topicStatusLabel(status: string) {
@@ -41,19 +66,139 @@ function topicStatusLabel(status: string) {
     case "dominado":
       return "Dominado";
     default:
-      return "Não iniciado";
+      return "Nao iniciado";
   }
+}
+
+function toWeekDay(date = new Date()): WeekDay {
+  return WEEKDAY_SEQUENCE[date.getDay()];
+}
+
+function formatClock(totalSeconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function uniqueSubjects(subjects: SubjectId[]) {
+  return [...new Set(subjects)] as SubjectId[];
+}
+
+function getNextTopicName(state: StudyState, subject: SubjectId) {
+  return TOPICS[subject].find((topic) => state.statusMap[topic.id] !== "dominado")?.name ?? TOPICS[subject][0]?.name ?? "";
+}
+
+function getTopWeightedSubject(state: StudyState) {
+  return [...SUBJECT_ORDER].sort((a, b) => state.weights[b] - state.weights[a])[0];
+}
+
+function getSuggestedStudy(state: StudyState, schedule: ReturnType<typeof computeSchedule>, dueReviews: ReviewEntry[], todayWeekday: WeekDay) {
+  const todaysBlocks = schedule[todayWeekday] ?? [];
+  const firstDueReview = state.reviews
+    .filter((review) => review.dueDate <= todayKey())
+    .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))[0];
+  const firstScheduledBlock = todaysBlocks[0];
+  const subject = firstDueReview?.subject ?? firstScheduledBlock?.subject ?? getTopWeightedSubject(state);
+  const reason = firstDueReview
+    ? "Tem revisao vencendo hoje"
+    : firstScheduledBlock
+      ? "Primeiro bloco do cronograma de hoje"
+      : "Maior peso no seu cronograma";
+  const topic = firstDueReview?.topicName ?? getNextTopicName(state, subject);
+
+  return { subject, reason, topic, todaysBlocks };
 }
 
 function App() {
   const [state, setState] = usePersistentState<StudyState>(APP_STORAGE_KEY, createFreshState(todayKey()));
-  const [tab, setTab] = useState<TabKey>("painel");
+  const [tab, setTab] = useState<TabKey>("hoje");
   const today = todayKey();
+  const todayWeekday = toWeekDay();
   const stats = useMemo(() => summaryStats(state, today), [state, today]);
   const schedule = useMemo(() => computeSchedule(state), [state]);
   const topicCount = listTopics().length;
+  const simulados = useMemo(() => [...state.simulados].sort((a, b) => (a.date < b.date ? 1 : -1)), [state.simulados]);
+  const dueReviews = useMemo(
+    () => state.reviews.filter((review) => review.dueDate <= today).sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1)),
+    [state.reviews, today],
+  );
+  const upcomingReviews = useMemo(
+    () =>
+      state.reviews
+        .filter((review) => review.dueDate > today)
+        .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))
+        .slice(0, 10),
+    [state.reviews, today],
+  );
+  const suggested = useMemo(() => getSuggestedStudy(state, schedule, dueReviews, todayWeekday), [state, schedule, dueReviews, todayWeekday]);
+  const studySuggestions = useMemo(() => {
+    const subjects = uniqueSubjects([
+      ...dueReviews.map((review) => review.subject),
+      ...suggested.todaysBlocks.map((block) => block.subject),
+      ...[...SUBJECT_ORDER].sort((a, b) => state.weights[b] - state.weights[a]).slice(0, 3),
+    ]);
+    return subjects.slice(0, 6);
+  }, [dueReviews, suggested.todaysBlocks, state.weights]);
+
+  const [timer, setTimer] = useState<TimerState>(() => ({
+    subject: suggested.subject,
+    phase: "focus",
+    focusMinutes: 25,
+    breakMinutes: 5,
+    remainingSeconds: 25 * 60,
+    running: false,
+    completedCycles: 0,
+  }));
+
+  useEffect(() => {
+    if (!timer.running) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setTimer((current) => {
+        if (!current.running) {
+          return current;
+        }
+
+        if (current.remainingSeconds > 1) {
+          return {
+            ...current,
+            remainingSeconds: current.remainingSeconds - 1,
+          };
+        }
+
+        if (current.phase === "focus") {
+          setState((prev) => ({
+            ...prev,
+            sessions: [...prev.sessions, { date: today, subject: current.subject, minutes: current.focusMinutes }],
+          }));
+
+          return {
+            ...current,
+            phase: "break",
+            running: false,
+            remainingSeconds: current.breakMinutes * 60,
+            completedCycles: current.completedCycles + 1,
+          };
+        }
+
+        return {
+          ...current,
+          phase: "focus",
+          running: false,
+          remainingSeconds: current.focusMinutes * 60,
+        };
+      });
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [setState, today, timer.running]);
 
   const totalWeight = SUBJECT_ORDER.reduce((sum, subject) => sum + state.weights[subject], 0);
+  const currentPhaseMinutes = timer.phase === "focus" ? timer.focusMinutes : timer.breakMinutes;
+  const timerProgress = currentPhaseMinutes > 0 ? 1 - timer.remainingSeconds / (currentPhaseMinutes * 60) : 0;
 
   function updateWeight(subject: SubjectId, value: number) {
     setState((prev) => ({
@@ -120,145 +265,282 @@ function App() {
     });
   }
 
-  const dueReviews = state.reviews.filter((review) => review.dueDate <= today).sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
-  const upcomingReviews = state.reviews
-    .filter((review) => review.dueDate > today)
-    .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))
-    .slice(0, 10);
+  function startStudy(subject: SubjectId) {
+    setTimer((prev) => ({
+      ...prev,
+      subject,
+      phase: "focus",
+      running: true,
+      remainingSeconds: prev.focusMinutes * 60,
+    }));
+    setTab("hoje");
+  }
 
-  const simulados = [...state.simulados].sort((a, b) => (a.date < b.date ? 1 : -1));
+  function startOrResumeTimer() {
+    setTimer((prev) => ({
+      ...prev,
+      running: true,
+      remainingSeconds: prev.remainingSeconds > 0 ? prev.remainingSeconds : prev.focusMinutes * 60,
+    }));
+  }
+
+  function pauseTimer() {
+    setTimer((prev) => ({
+      ...prev,
+      running: false,
+    }));
+  }
+
+  function resetTimer() {
+    setTimer((prev) => ({
+      ...prev,
+      phase: "focus",
+      running: false,
+      remainingSeconds: prev.focusMinutes * 60,
+    }));
+  }
+
+  function skipPhase() {
+    setTimer((prev) => ({
+      ...prev,
+      phase: prev.phase === "focus" ? "break" : "focus",
+      running: false,
+      remainingSeconds: (prev.phase === "focus" ? prev.breakMinutes : prev.focusMinutes) * 60,
+    }));
+  }
+
+  function updateTimerDurations(nextFocusMinutes: number, nextBreakMinutes: number) {
+    const focusMinutes = clampMinutes(nextFocusMinutes, 10, 90);
+    const breakMinutes = clampMinutes(nextBreakMinutes, 3, 30);
+
+    setTimer((prev) => {
+      return {
+        ...prev,
+        focusMinutes,
+        breakMinutes,
+        remainingSeconds: !prev.running
+          ? prev.phase === "focus"
+            ? focusMinutes * 60
+            : breakMinutes * 60
+          : prev.remainingSeconds,
+      };
+    });
+  }
+
+  const suggestedSubjectMeta = SUBJECT_META[suggested.subject];
 
   return (
     <div className="app-shell">
-      <div className="background-orb background-orb-a" />
-      <div className="background-orb background-orb-b" />
+      <div className="background-accent background-accent-a" />
+      <div className="background-accent background-accent-b" />
 
       <header className="hero">
         <div>
-          <p className="eyebrow">Painel de missão</p>
+          <p className="eyebrow">Estudo simples</p>
           <h1>Study Plan</h1>
           <p className="hero-copy">
-            Uma base local-first para organizar a rotina de estudos, revisar o que importa e enxergar evolução sem
-            ruído.
+            Uma interface limpa para saber o que estudar agora, iniciar um pomodoro com um clique e manter o ritmo
+            sem distração.
           </p>
         </div>
         <div className="hero-meta">
           <span>{formatLongDate(today)}</span>
-          <span>{topicCount} tópicos mapeados</span>
-          <span>{state.sessions.length} sessões registradas</span>
+          <span>{topicCount} topicos mapeados</span>
+          <span>{state.sessions.length} sessoes registradas</span>
         </div>
       </header>
 
       <section className="countdown-grid">
         <article className="count-card">
-          <p>ENEM, 1º dia</p>
-          <strong>{Math.max(0, Math.round((new Date(`${TARGET_DATES.enemDay1}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000))}</strong>
-          <span>{formatDate(TARGET_DATES.enemDay1)} · Linguagens, Humanas e Redação</span>
+          <p>ENEM, 1 dia</p>
+          <strong>
+            {Math.max(
+              0,
+              Math.round((new Date(`${TARGET_DATES.enemDay1}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000),
+            )}
+          </strong>
+          <span>
+            {formatDate(TARGET_DATES.enemDay1)} - Linguagens, Humanas e Redacao
+          </span>
         </article>
         <article className="count-card">
-          <p>ENEM, 2º dia</p>
-          <strong>{Math.max(0, Math.round((new Date(`${TARGET_DATES.enemDay2}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000))}</strong>
-          <span>{formatDate(TARGET_DATES.enemDay2)} · Natureza e Matemática</span>
+          <p>ENEM, 2 dia</p>
+          <strong>
+            {Math.max(
+              0,
+              Math.round((new Date(`${TARGET_DATES.enemDay2}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000),
+            )}
+          </strong>
+          <span>
+            {formatDate(TARGET_DATES.enemDay2)} - Natureza e Matematica
+          </span>
         </article>
         <article className="count-card">
           <p>Inatel estimado</p>
-          <strong>{Math.max(0, Math.round((new Date(`${TARGET_DATES.inatelEstimate}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000))}</strong>
-          <span>{formatDate(TARGET_DATES.inatelEstimate)} · ajuste quando o edital sair</span>
+          <strong>
+            {Math.max(
+              0,
+              Math.round((new Date(`${TARGET_DATES.inatelEstimate}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000),
+            )}
+          </strong>
+          <span>
+            {formatDate(TARGET_DATES.inatelEstimate)} - ajuste quando o edital sair
+          </span>
         </article>
       </section>
 
-      <nav className="tab-bar" aria-label="Seções do projeto">
-        {TAB_KEYS.map((item) => (
-          <button key={item} className={item === tab ? "tab active" : "tab"} onClick={() => setTab(item)} type="button">
-            {item}
+      <nav className="tab-bar" aria-label="Secoes do projeto">
+        {TAB_ITEMS.map((item) => (
+          <button key={item.key} className={item.key === tab ? "tab active" : "tab"} onClick={() => setTab(item.key)} type="button">
+            {item.label}
           </button>
         ))}
       </nav>
 
       <main className="content">
-        {tab === "painel" && (
-          <div className="panel-grid">
-            <section className="panel hero-panel">
+        {tab === "hoje" && (
+          <div className="today-layout">
+            <section className="panel panel-hero">
               <div className="section-head">
                 <div>
-                  <p className="section-kicker">Resumo</p>
-                  <h2>Progresso da semana</h2>
+                  <p className="section-kicker">Hoje</p>
+                  <h2>O que fazer agora</h2>
                 </div>
-                <span className="section-note">
-                  {formatDate(stats.weekStart)} - {formatDate(stats.weekEnd)}
-                </span>
+                <span className="section-note">{formatDate(today)}</span>
               </div>
 
-              <div className="stats-grid">
-                <article className="metric">
-                  <strong>{(stats.totalWeekMinutes / 60).toFixed(1)}h</strong>
-                  <span>estudadas nesta semana</span>
-                </article>
-                <article className="metric">
-                  <strong>{(stats.totalMinutes / 60).toFixed(1)}h</strong>
-                  <span>acumuladas no projeto</span>
-                </article>
-                <article className="metric">
-                  <strong>{stats.streak}</strong>
-                  <span>dias seguidos estudando</span>
-                </article>
-                <article className="metric">
-                  <strong className={stats.pendingReviews ? "warning" : ""}>{stats.pendingReviews}</strong>
-                  <span>revisões pendentes hoje</span>
-                </article>
+              <div className="today-hero">
+                <div>
+                  <p className="today-label">Estudo do dia</p>
+                  <h3>{suggestedSubjectMeta.name}</h3>
+                  <p className="hero-copy compact">
+                    {suggested.reason}. Proximo topico: <strong>{suggested.topic}</strong>.
+                  </p>
+                  <div className="badge-row">
+                    <span className="badge soft">Pomodoro 25/5 editavel</span>
+                    <span className="badge soft">{dueReviews.length} revisoes hoje</span>
+                    <span className="badge soft">{suggested.todaysBlocks.length} blocos no cronograma</span>
+                  </div>
+                </div>
+
+                <div className="today-actions">
+                  <button className="primary" type="button" onClick={() => startStudy(suggested.subject)}>
+                    Comecar agora
+                  </button>
+                  <button className="ghost" type="button" onClick={() => setTab("cronograma")}>
+                    Ver cronograma
+                  </button>
+                </div>
               </div>
 
-              <div className="subject-bars">
-                {SUBJECT_ORDER.map((subject) => {
-                  const target = Math.round(stats.targetWeekMinutes * (state.weights[subject] / 100));
-                  const done = stats.bySubject[subject] ?? 0;
-                  const progress = target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0;
-                  return (
-                    <div className="bar-row" key={subject}>
-                      <span>{SUBJECT_META[subject].name}</span>
-                      <div className="bar-track">
-                        <div className="bar-fill" style={{ width: `${progress}%`, background: SUBJECT_META[subject].color }} />
-                      </div>
-                      <span>{(done / 60).toFixed(1)}h / {(target / 60).toFixed(1)}h</span>
-                    </div>
-                  );
-                })}
+              <div className="subject-pick-grid">
+                {studySuggestions.map((subject) => (
+                  <button
+                    key={subject}
+                    type="button"
+                    className={subject === timer.subject && !timer.running ? "subject-pick selected" : "subject-pick"}
+                    onClick={() => startStudy(subject)}
+                  >
+                    <span>{SUBJECT_META[subject].name}</span>
+                    <strong>{getNextTopicName(state, subject)}</strong>
+                  </button>
+                ))}
               </div>
             </section>
 
-            <section className="panel">
+            <section className="panel timer-panel">
               <div className="section-head">
                 <div>
-                  <p className="section-kicker">Ação rápida</p>
-                  <h2>Registrar sessão</h2>
+                  <p className="section-kicker">Pomodoro</p>
+                  <h2>Timer de foco</h2>
+                </div>
+                <span className="section-note">Sessao salva ao terminar o foco</span>
+              </div>
+
+              <div className="timer-card">
+                <div className="timer-status">
+                  <span className="badge soft">{timer.phase === "focus" ? "Foco" : "Pausa"}</span>
+                  <span className="section-note">{SUBJECT_META[timer.subject].name}</span>
+                </div>
+
+                <div className="timer-face">{formatClock(timer.remainingSeconds)}</div>
+
+                <div className="timer-track" aria-hidden="true">
+                  <div className="timer-fill" style={{ width: `${Math.min(100, Math.max(0, timerProgress * 100))}%` }} />
+                </div>
+
+                <div className="timer-meta">
+                  <span>{timer.running ? "Rodando agora" : "Pausado"}</span>
+                  <span>{timer.completedCycles} ciclo(s) completos</span>
+                </div>
+
+                <div className="timer-controls">
+                  <button className="primary" type="button" onClick={timer.running ? pauseTimer : startOrResumeTimer}>
+                    {timer.running ? "Pausar" : "Iniciar"}
+                  </button>
+                  <button className="ghost" type="button" onClick={resetTimer}>
+                    Reiniciar
+                  </button>
+                  <button className="ghost" type="button" onClick={skipPhase}>
+                    Pular fase
+                  </button>
+                </div>
+
+                <div className="timer-settings">
+                  <label>
+                    Foco
+                    <input
+                      type="number"
+                      min="10"
+                      max="90"
+                      step="1"
+                      value={timer.focusMinutes}
+                      onChange={(event) => updateTimerDurations(Number(event.target.value), timer.breakMinutes)}
+                    />
+                  </label>
+                  <label>
+                    Pausa
+                    <input
+                      type="number"
+                      min="3"
+                      max="30"
+                      step="1"
+                      value={timer.breakMinutes}
+                      onChange={(event) => updateTimerDurations(timer.focusMinutes, Number(event.target.value))}
+                    />
+                  </label>
+                  <label>
+                    Materia
+                    <select
+                      value={timer.subject}
+                      onChange={(event) => setTimer((prev) => ({ ...prev, subject: event.target.value as SubjectId }))}
+                    >
+                      {SUBJECT_ORDER.map((subject) => (
+                        <option key={subject} value={subject}>
+                          {SUBJECT_META[subject].name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="preset-row">
+                  {[
+                    { focus: 25, break: 5, label: "25 / 5" },
+                    { focus: 40, break: 8, label: "40 / 8" },
+                    { focus: 50, break: 10, label: "50 / 10" },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      className="chip-button"
+                      onClick={() => updateTimerDurations(preset.focus, preset.break)}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <form
-                className="stack"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  addSession(new FormData(event.currentTarget));
-                  event.currentTarget.reset();
-                }}
-              >
-                <label>
-                  Matéria
-                  <select name="subject" defaultValue="matematica">
-                    {SUBJECT_ORDER.map((subject) => (
-                      <option key={subject} value={subject}>
-                        {SUBJECT_META[subject].name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Minutos
-                  <input name="minutes" type="number" min="5" step="5" defaultValue={60} />
-                </label>
-                <button className="primary" type="submit">
-                  Registrar
-                </button>
-              </form>
             </section>
           </div>
         )}
@@ -269,7 +551,7 @@ function App() {
               <div className="section-head">
                 <div>
                   <p className="section-kicker">Balanceamento</p>
-                  <h2>Peso por matéria</h2>
+                  <h2>Peso por materia</h2>
                 </div>
                 <span className={totalWeight === 100 ? "badge success" : "badge warning"}>Soma atual: {totalWeight}%</span>
               </div>
@@ -295,7 +577,7 @@ function App() {
               <div className="section-head">
                 <div>
                   <p className="section-kicker">Disponibilidade</p>
-                  <h2>Horas e dias úteis</h2>
+                  <h2>Horas e dias uteis</h2>
                 </div>
               </div>
 
@@ -367,7 +649,7 @@ function App() {
                                 background: `${SUBJECT_META[block.subject].color}14`,
                               }}
                             >
-                              {SUBJECT_META[block.subject].name} · {block.hours}h
+                              {SUBJECT_META[block.subject].name} - {block.hours}h
                             </span>
                           ))
                         ) : (
@@ -386,10 +668,10 @@ function App() {
           <section className="panel">
             <div className="section-head">
               <div>
-                <p className="section-kicker">Conteúdo</p>
-                <h2>Trilha por matéria</h2>
+                <p className="section-kicker">Conteudo</p>
+                <h2>Trilha por materia</h2>
               </div>
-              <span className="section-note">Clique na matéria para expandir</span>
+              <span className="section-note">Clique em um topico para atualizar o status</span>
             </div>
 
             <div className="subject-list">
@@ -401,7 +683,7 @@ function App() {
                     <summary>
                       <div>
                         <strong>{SUBJECT_META[subject].name}</strong>
-                        <span>{TOPICS[subject].length} tópicos · {pct}% dominado</span>
+                        <span>{TOPICS[subject].length} topicos - {pct}% dominado</span>
                       </div>
                       <div className="summary-meta">
                         <span className="mini-pill">{revisionPct}% em andamento</span>
@@ -436,7 +718,7 @@ function App() {
               <div className="section-head">
                 <div>
                   <p className="section-kicker">Hoje</p>
-                  <h2>Revisões pendentes</h2>
+                  <h2>Revisoes pendentes</h2>
                 </div>
                 <span className="badge warning">{dueReviews.length} itens</span>
               </div>
@@ -448,7 +730,7 @@ function App() {
                       <div>
                         <strong>{review.topicName}</strong>
                         <p>
-                          {SUBJECT_META[review.subject].name} · etapa {review.stage + 1}/{REVIEW_OFFSETS.length}
+                          {SUBJECT_META[review.subject].name} - etapa {review.stage + 1}/{REVIEW_OFFSETS.length}
                         </p>
                         <span>Venceu em {formatDate(review.dueDate)}</span>
                       </div>
@@ -462,7 +744,7 @@ function App() {
                     </article>
                   ))
                 ) : (
-                  <div className="empty">Nenhuma revisão pendente hoje.</div>
+                  <div className="empty">Nenhuma revisao pendente hoje.</div>
                 )}
               </div>
             </section>
@@ -470,7 +752,7 @@ function App() {
             <section className="panel">
               <div className="section-head">
                 <div>
-                  <p className="section-kicker">Próximos passos</p>
+                  <p className="section-kicker">Proximos passos</p>
                   <h2>Fila futura</h2>
                 </div>
               </div>
@@ -482,14 +764,14 @@ function App() {
                       <div>
                         <strong>{review.topicName}</strong>
                         <p>
-                          {SUBJECT_META[review.subject].name} · etapa {review.stage + 1}/{REVIEW_OFFSETS.length}
+                          {SUBJECT_META[review.subject].name} - etapa {review.stage + 1}/{REVIEW_OFFSETS.length}
                         </p>
                       </div>
                       <span>{formatDate(review.dueDate)}</span>
                     </article>
                   ))
                 ) : (
-                  <div className="empty">Domine tópicos na trilha para alimentar a fila.</div>
+                  <div className="empty">Domine topicos na trilha para alimentar a fila.</div>
                 )}
               </div>
             </section>
@@ -527,14 +809,14 @@ function App() {
                   </select>
                 </label>
                 <label>
-                  Área
+                  Area
                   <select name="area" defaultValue="Geral">
-                    <option>Matemática</option>
-                    <option>Física</option>
-                    <option>Química</option>
+                    <option>Matematica</option>
+                    <option>Fisica</option>
+                    <option>Quimica</option>
                     <option>Linguagens</option>
                     <option>Humanas</option>
-                    <option>Redação</option>
+                    <option>Redacao</option>
                     <option>Geral</option>
                   </select>
                 </label>
@@ -551,8 +833,8 @@ function App() {
             <section className="panel">
               <div className="section-head">
                 <div>
-                  <p className="section-kicker">Histórico</p>
-                  <h2>Últimos resultados</h2>
+                  <p className="section-kicker">Historico</p>
+                  <h2>Ultimos resultados</h2>
                 </div>
               </div>
 
@@ -563,7 +845,7 @@ function App() {
                       <div>
                         <strong>{formatDate(item.date)}</strong>
                         <p>
-                          {item.tipo} · {item.area}
+                          {item.tipo} - {item.area}
                         </p>
                       </div>
                       <div className="simulado-actions">
@@ -597,17 +879,17 @@ function App() {
               <div className="section-head">
                 <div>
                   <p className="section-kicker">Notas do projeto</p>
-                  <h2>Sobre esta versão</h2>
+                  <h2>Sobre esta versao</h2>
                 </div>
               </div>
               <div className="copy-block">
                 <p>
-                  A base foi remodelada para ficar local-first, tipada e fácil de expandir. O foco agora é clareza:
-                  acompanhar rotina, priorizar matérias, marcar evolução e deixar o projeto pronto para crescer.
+                  Esta versao prioriza clareza: abrir o app, ver o estudo do dia, iniciar o pomodoro e registrar o
+                  foco sem ruido visual.
                 </p>
                 <p>
-                  Próximos passos naturais: adicionar exportação de dados, calendário visual, metas semanais mais
-                  inteligentes e sincronização opcional.
+                  O cronograma, as revisoes e os simulados continuam disponiveis, mas a ideia principal agora e reduzir
+                  friccao para comecar a estudar.
                 </p>
               </div>
             </section>
@@ -619,19 +901,63 @@ function App() {
                   <h2>Dados locais</h2>
                 </div>
               </div>
-              <p className="section-note">Tudo fica salvo no navegador. Você pode recomeçar quando quiser.</p>
+              <p className="section-note">Tudo fica salvo no navegador. Voce pode recomecar quando quiser.</p>
               <button
                 type="button"
                 className="ghost danger"
                 onClick={() => {
                   if (window.confirm("Isso vai apagar todo o progresso salvo. Quer continuar?")) {
                     setState(createFreshState(todayKey()));
-                    setTab("painel");
+                    setTab("hoje");
+                    setTimer({
+                      subject: suggested.subject,
+                      phase: "focus",
+                      focusMinutes: 25,
+                      breakMinutes: 5,
+                      remainingSeconds: 25 * 60,
+                      running: false,
+                      completedCycles: 0,
+                    });
                   }
                 }}
               >
                 Apagar todos os dados
               </button>
+            </section>
+
+            <section className="panel panel-wide">
+              <div className="section-head">
+                <div>
+                  <p className="section-kicker">Registro rapido</p>
+                  <h2>Adicionar uma sessao manual</h2>
+                </div>
+              </div>
+              <form
+                className="stack manual-session"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  addSession(new FormData(event.currentTarget));
+                  event.currentTarget.reset();
+                }}
+              >
+                <label>
+                  Materia
+                  <select name="subject" defaultValue="matematica">
+                    {SUBJECT_ORDER.map((subject) => (
+                      <option key={subject} value={subject}>
+                        {SUBJECT_META[subject].name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Minutos
+                  <input name="minutes" type="number" min="5" step="5" defaultValue={60} />
+                </label>
+                <button className="primary" type="submit">
+                  Registrar
+                </button>
+              </form>
             </section>
           </div>
         )}

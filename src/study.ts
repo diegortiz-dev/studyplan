@@ -1,4 +1,4 @@
-import { DEFAULT_STATE, REVIEW_OFFSETS, SUBJECT_ORDER, SUBJECT_META, TOPICS } from "./data";
+import { DEFAULT_STATE, REVIEW_OFFSETS, SUBJECT_ORDER, TOPICS } from "./data";
 import type { ReviewEntry, ScheduleBlock, StudyState, SubjectId, TopicStatus, WeekDay } from "./types";
 
 export const TOPIC_STATUS_ORDER: TopicStatus[] = ["novo", "revisar", "dominado"];

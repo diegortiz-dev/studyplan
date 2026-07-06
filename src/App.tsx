@@ -12,7 +12,6 @@ import {
   computeSchedule,
   formatDate,
   formatLongDate,
-  listTopics,
   markReviewDone,
   nextTopicStatus,
   progressBySubject,
@@ -59,14 +58,14 @@ function clampMinutes(value: number, min: number, max: number) {
 
 function topicStatusLabel(status: string) {
   switch (status) {
-    case "estudando":
-      return "Estudando";
     case "revisar":
       return "Revisar";
     case "dominado":
-      return "Dominado";
+      return "Dominei";
+    case "estudando":
+      return "Estudar";
     default:
-      return "Nao iniciado";
+      return "Estudar";
   }
 }
 
@@ -81,8 +80,24 @@ function formatClock(totalSeconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function uniqueSubjects(subjects: SubjectId[]) {
-  return [...new Set(subjects)] as SubjectId[];
+function formatStudyTime(hours: number) {
+  const totalMinutes = Math.round(hours * 60);
+  const wholeHours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (wholeHours === 0) {
+    return `${minutes} min`;
+  }
+
+  if (minutes === 0) {
+    return `${wholeHours}h`;
+  }
+
+  return `${wholeHours}h ${minutes}min`;
+}
+
+function formatStudyMinutes(totalMinutes: number) {
+  return formatStudyTime(totalMinutes / 60);
 }
 
 function getNextTopicName(state: StudyState, subject: SubjectId) {
@@ -117,7 +132,6 @@ function App() {
   const todayWeekday = toWeekDay();
   const stats = useMemo(() => summaryStats(state, today), [state, today]);
   const schedule = useMemo(() => computeSchedule(state), [state]);
-  const topicCount = listTopics().length;
   const simulados = useMemo(() => [...state.simulados].sort((a, b) => (a.date < b.date ? 1 : -1)), [state.simulados]);
   const dueReviews = useMemo(
     () => state.reviews.filter((review) => review.dueDate <= today).sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1)),
@@ -132,15 +146,6 @@ function App() {
     [state.reviews, today],
   );
   const suggested = useMemo(() => getSuggestedStudy(state, schedule, dueReviews, todayWeekday), [state, schedule, dueReviews, todayWeekday]);
-  const studySuggestions = useMemo(() => {
-    const subjects = uniqueSubjects([
-      ...dueReviews.map((review) => review.subject),
-      ...suggested.todaysBlocks.map((block) => block.subject),
-      ...[...SUBJECT_ORDER].sort((a, b) => state.weights[b] - state.weights[a]).slice(0, 3),
-    ]);
-    return subjects.slice(0, 6);
-  }, [dueReviews, suggested.todaysBlocks, state.weights]);
-
   const [timer, setTimer] = useState<TimerState>(() => ({
     subject: suggested.subject,
     phase: "focus",
@@ -199,6 +204,9 @@ function App() {
   const totalWeight = SUBJECT_ORDER.reduce((sum, subject) => sum + state.weights[subject], 0);
   const currentPhaseMinutes = timer.phase === "focus" ? timer.focusMinutes : timer.breakMinutes;
   const timerProgress = currentPhaseMinutes > 0 ? 1 - timer.remainingSeconds / (currentPhaseMinutes * 60) : 0;
+  const todaySessions = stats.weekSessions.filter((session) => session.date === today);
+  const todayMinutes = todaySessions.reduce((sum, session) => sum + session.minutes, 0);
+  const todayFocusCount = todaySessions.length;
 
   function updateWeight(subject: SubjectId, value: number) {
     setState((prev) => ({
@@ -331,63 +339,17 @@ function App() {
 
   return (
     <div className="app-shell">
-      <div className="background-accent background-accent-a" />
-      <div className="background-accent background-accent-b" />
-
       <header className="hero">
         <div>
           <p className="eyebrow">Estudo simples</p>
           <h1>Study Plan</h1>
-          <p className="hero-copy">
-            Uma interface limpa para saber o que estudar agora, iniciar um pomodoro com um clique e manter o ritmo
-            sem distração.
-          </p>
         </div>
         <div className="hero-meta">
           <span>{formatLongDate(today)}</span>
-          <span>{topicCount} topicos mapeados</span>
-          <span>{state.sessions.length} sessoes registradas</span>
+          <span>{formatStudyMinutes(todayMinutes)} hoje</span>
+          <span>{state.sessions.length} sessoes no total</span>
         </div>
       </header>
-
-      <section className="countdown-grid">
-        <article className="count-card">
-          <p>ENEM, 1 dia</p>
-          <strong>
-            {Math.max(
-              0,
-              Math.round((new Date(`${TARGET_DATES.enemDay1}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000),
-            )}
-          </strong>
-          <span>
-            {formatDate(TARGET_DATES.enemDay1)} - Linguagens, Humanas e Redacao
-          </span>
-        </article>
-        <article className="count-card">
-          <p>ENEM, 2 dia</p>
-          <strong>
-            {Math.max(
-              0,
-              Math.round((new Date(`${TARGET_DATES.enemDay2}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000),
-            )}
-          </strong>
-          <span>
-            {formatDate(TARGET_DATES.enemDay2)} - Natureza e Matematica
-          </span>
-        </article>
-        <article className="count-card">
-          <p>Inatel estimado</p>
-          <strong>
-            {Math.max(
-              0,
-              Math.round((new Date(`${TARGET_DATES.inatelEstimate}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000),
-            )}
-          </strong>
-          <span>
-            {formatDate(TARGET_DATES.inatelEstimate)} - ajuste quando o edital sair
-          </span>
-        </article>
-      </section>
 
       <nav className="tab-bar" aria-label="Secoes do projeto">
         {TAB_ITEMS.map((item) => (
@@ -403,48 +365,48 @@ function App() {
             <section className="panel panel-hero">
               <div className="section-head">
                 <div>
-                  <p className="section-kicker">Hoje</p>
-                  <h2>O que fazer agora</h2>
+                  <p className="section-kicker">Agora</p>
+                  <h2>{suggestedSubjectMeta.name}</h2>
                 </div>
                 <span className="section-note">{formatDate(today)}</span>
               </div>
 
               <div className="today-hero">
                 <div>
-                  <p className="today-label">Estudo do dia</p>
-                  <h3>{suggestedSubjectMeta.name}</h3>
+                  <p className="today-label">{suggested.reason}</p>
+                  <h3>{suggested.topic}</h3>
                   <p className="hero-copy compact">
-                    {suggested.reason}. Proximo topico: <strong>{suggested.topic}</strong>.
+                    25 min foco / 5 min pausa.
                   </p>
-                  <div className="badge-row">
-                    <span className="badge soft">Pomodoro 25/5 editavel</span>
-                    <span className="badge soft">{dueReviews.length} revisoes hoje</span>
-                    <span className="badge soft">{suggested.todaysBlocks.length} blocos no cronograma</span>
-                  </div>
                 </div>
 
                 <div className="today-actions">
                   <button className="primary" type="button" onClick={() => startStudy(suggested.subject)}>
-                    Comecar agora
+                    Comecar foco
                   </button>
                   <button className="ghost" type="button" onClick={() => setTab("cronograma")}>
-                    Ver cronograma
+                    Planejar
                   </button>
                 </div>
               </div>
 
-              <div className="subject-pick-grid">
-                {studySuggestions.map((subject) => (
-                  <button
-                    key={subject}
-                    type="button"
-                    className={subject === timer.subject && !timer.running ? "subject-pick selected" : "subject-pick"}
-                    onClick={() => startStudy(subject)}
-                  >
-                    <span>{SUBJECT_META[subject].name}</span>
-                    <strong>{getNextTopicName(state, subject)}</strong>
-                  </button>
-                ))}
+              <div className="daily-summary" aria-label="Resumo discreto do dia">
+                <span>
+                  <strong>{todayFocusCount}</strong>
+                  foco(s) hoje
+                </span>
+                <span>
+                  <strong>{formatStudyMinutes(todayMinutes)}</strong>
+                  estudados
+                </span>
+                <span>
+                  <strong>{stats.streak}</strong>
+                  dia(s) seguidos
+                </span>
+                <span>
+                  <strong>{dueReviews.length}</strong>
+                  revisoes
+                </span>
               </div>
             </section>
 
@@ -623,7 +585,7 @@ function App() {
                   <p className="section-kicker">Cronograma</p>
                   <h2>Blocos sugeridos</h2>
                 </div>
-                <span className="section-note">{(state.hoursPerDay * state.days.length).toFixed(1)}h por semana</span>
+                <span className="section-note">{formatStudyTime(state.hoursPerDay * state.days.length)} por semana</span>
               </div>
 
               <div className="schedule-grid">
@@ -635,7 +597,7 @@ function App() {
                     <article className="schedule-card" key={day}>
                       <header>
                         <strong>{WEEKDAY_LABELS[day]}</strong>
-                        <span>{total.toFixed(1)}h</span>
+                        <span>{formatStudyTime(total)}</span>
                       </header>
                       <div className="chips">
                         {blocks.length ? (
@@ -649,7 +611,7 @@ function App() {
                                 background: `${SUBJECT_META[block.subject].color}14`,
                               }}
                             >
-                              {SUBJECT_META[block.subject].name} - {block.hours}h
+                              {SUBJECT_META[block.subject].name} - {formatStudyTime(block.hours)}
                             </span>
                           ))
                         ) : (
@@ -962,6 +924,45 @@ function App() {
           </div>
         )}
       </main>
+
+      <section className="countdown-grid" aria-label="Datas importantes">
+        <article className="count-card">
+          <p>ENEM, 1 dia</p>
+          <strong>
+            {Math.max(
+              0,
+              Math.round((new Date(`${TARGET_DATES.enemDay1}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000),
+            )}
+          </strong>
+          <span>
+            {formatDate(TARGET_DATES.enemDay1)} - Linguagens, Humanas e Redacao
+          </span>
+        </article>
+        <article className="count-card">
+          <p>ENEM, 2 dia</p>
+          <strong>
+            {Math.max(
+              0,
+              Math.round((new Date(`${TARGET_DATES.enemDay2}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000),
+            )}
+          </strong>
+          <span>
+            {formatDate(TARGET_DATES.enemDay2)} - Natureza e Matematica
+          </span>
+        </article>
+        <article className="count-card">
+          <p>Inatel estimado</p>
+          <strong>
+            {Math.max(
+              0,
+              Math.round((new Date(`${TARGET_DATES.inatelEstimate}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86400000),
+            )}
+          </strong>
+          <span>
+            {formatDate(TARGET_DATES.inatelEstimate)} - ajuste quando o edital sair
+          </span>
+        </article>
+      </section>
     </div>
   );
 }

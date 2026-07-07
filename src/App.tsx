@@ -156,6 +156,45 @@ function App() {
     completedCycles: 0,
   }));
 
+  function playAlarm(kind: "focusEnd" | "breakEnd") {
+    try {
+      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.value = kind === "focusEnd" ? 880 : 660;
+      gain.gain.value = 0.08;
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      const now = ctx.currentTime;
+      osc.start(now);
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + (kind === "focusEnd" ? 1.2 : 0.9));
+      osc.stop(now + (kind === "focusEnd" ? 1.25 : 0.95));
+
+      // Close context after sound plays to release resources
+      setTimeout(() => {
+        try {
+          ctx.close();
+        } catch (e) {
+          // ignore
+        }
+      }, 1500);
+    } catch (e) {
+      // Fallback: try a short alert (silent on many browsers) — ignore errors
+      try {
+        // eslint-disable-next-line no-alert
+        void (window as any).alert?.(kind === "focusEnd" ? "Foco finalizado" : "Pausa finalizada");
+      } catch (err) {
+        // nothing
+      }
+    }
+  }
+
   useEffect(() => {
     if (!timer.running) {
       return;
@@ -180,6 +219,13 @@ function App() {
             sessions: [...prev.sessions, { date: today, subject: current.subject, minutes: current.focusMinutes }],
           }));
 
+          // play alarm for focus end
+          try {
+            playAlarm("focusEnd");
+          } catch (err) {
+            // ignore
+          }
+
           return {
             ...current,
             phase: "break",
@@ -187,6 +233,13 @@ function App() {
             remainingSeconds: current.breakMinutes * 60,
             completedCycles: current.completedCycles + 1,
           };
+        }
+
+        // play alarm for break end
+        try {
+          playAlarm("breakEnd");
+        } catch (err) {
+          // ignore
         }
 
         return {

@@ -1,17 +1,61 @@
 import type { StudyState, SubjectId, SubjectMeta, TopicDefinition, WeekDay } from "./types";
 
 export const SUBJECT_META: Record<SubjectId, SubjectMeta> = {
-  matematica: { name: "Matemática", color: "#58d9e8", tag: "exatas" },
-  fisica: { name: "Física", color: "#f3b24f", tag: "exatas" },
-  quimica: { name: "Química", color: "#c48dff", tag: "exatas" },
-  redacao: { name: "Redação", color: "#59d58f", tag: "linguagens" },
-  portugues: { name: "Português / Literatura", color: "#7aa7ff", tag: "linguagens" },
-  ingles: { name: "Inglês", color: "#f08f98", tag: "linguagens" },
-  historia: { name: "História", color: "#9ca8bf", tag: "humanas" },
-  geografia: { name: "Geografia", color: "#b7c7d9", tag: "humanas" },
-  filosofia: { name: "Filosofia", color: "#d6c7e8", tag: "humanas" },
-  sociologia: { name: "Sociologia", color: "#c9d6b9", tag: "humanas" },
-  atualidades: { name: "Atualidades", color: "#f0d9c0", tag: "humanas" },
+  matematica: {
+    name: "Matemática",
+    color: "#2563EB", // Azul
+    tag: "exatas",
+  },
+  fisica: {
+    name: "Física",
+    color: "#F59E0B", // Âmbar
+    tag: "exatas",
+  },
+  quimica: {
+    name: "Química",
+    color: "#10B981", // Verde
+    tag: "exatas",
+  },
+  redacao: {
+    name: "Redação",
+    color: "#EC4899", // Rosa
+    tag: "linguagens",
+  },
+  portugues: {
+    name: "Português / Literatura",
+    color: "#8B5CF6", // Roxo
+    tag: "linguagens",
+  },
+  ingles: {
+    name: "Inglês",
+    color: "#06B6D4", // Ciano
+    tag: "linguagens",
+  },
+  historia: {
+    name: "História",
+    color: "#B45309", // Marrom
+    tag: "humanas",
+  },
+  geografia: {
+    name: "Geografia",
+    color: "#16A34A", // Verde escuro
+    tag: "humanas",
+  },
+  filosofia: {
+    name: "Filosofia",
+    color: "#7C3AED", // Roxo profundo
+    tag: "humanas",
+  },
+  sociologia: {
+    name: "Sociologia",
+    color: "#64748B", // Cinza azulado
+    tag: "humanas",
+  },
+  atualidades: {
+    name: "Atualidades",
+    color: "#EF4444", // Vermelho
+    tag: "humanas",
+  },
 };
 
 export const SUBJECT_ORDER: SubjectId[] = [

@@ -51,6 +51,11 @@ export const SUBJECT_META: Record<SubjectId, SubjectMeta> = {
     color: "#64748B", // Cinza azulado
     tag: "humanas",
   },
+  biologia: {
+    name: "Biologia",
+    color: "#22C55E", // Verde claro
+    tag: "exatas",
+  },
   atualidades: {
     name: "Atualidades",
     color: "#EF4444", // Vermelho
@@ -69,6 +74,7 @@ export const SUBJECT_ORDER: SubjectId[] = [
   "geografia",
   "filosofia",
   "sociologia",
+  "biologia",
   "atualidades",
 ];
 
@@ -212,6 +218,18 @@ export const TOPICS: Record<SubjectId, TopicDefinition[]> = {
     { id: "so05", name: "Movimentos sociais e cidadania" },
     { id: "so06", name: "Sociologia brasileira e questões contemporâneas" },
   ],
+  biologia: [
+  { id: "bio01", name: "Citologia (estrutura e funcionamento das células)" },
+  { id: "bio02", name: "Bioquímica (água, sais, carboidratos, lipídios, proteínas e enzimas)" },
+  { id: "bio03", name: "Histologia (tecidos animais e vegetais)" },
+  { id: "bio04", name: "Fisiologia humana" },
+  { id: "bio05", name: "Botânica" },
+  { id: "bio06", name: "Zoologia" },
+  { id: "bio07", name: "Genética" },
+  { id: "bio08", name: "Biologia molecular e biotecnologia" },
+  { id: "bio09", name: "Evolução" },
+  { id: "bio10", name: "Ecologia" },
+],
   atualidades: [
     { id: "at01", name: "Política nacional e internacional contemporânea" },
     { id: "at02", name: "Meio ambiente e mudanças climáticas" },
@@ -251,6 +269,7 @@ export const DEFAULT_STATE: StudyState = {
     geografia: 1,
     filosofia: 1,
     sociologia: 1,
+    biologia: 1,
     atualidades: 1,
   },
   days: ["seg", "ter", "qua", "qui", "sex", "sab"],

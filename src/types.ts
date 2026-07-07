@@ -9,6 +9,7 @@ export type SubjectId =
   | "geografia"
   | "filosofia"
   | "sociologia"
+  | "biologia"
   | "atualidades";
 
 export type TopicStatus = "novo" | "estudando" | "revisar" | "dominado";

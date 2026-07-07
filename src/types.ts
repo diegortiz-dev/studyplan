@@ -5,7 +5,11 @@ export type SubjectId =
   | "redacao"
   | "portugues"
   | "ingles"
-  | "humanas";
+  | "historia"
+  | "geografia"
+  | "filosofia"
+  | "sociologia"
+  | "atualidades";
 
 export type TopicStatus = "novo" | "estudando" | "revisar" | "dominado";
 export type WeekDay = "seg" | "ter" | "qua" | "qui" | "sex" | "sab" | "dom";
